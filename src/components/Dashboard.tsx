@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Site } from '../lib/supabase';
-import { Menu, BarChart3 } from 'lucide-react';
+import { Menu, BarChart3, Plus } from 'lucide-react';
 import Analytics from './Analytics';
 import AddSiteModal from './AddSiteModal';
 import MenuDrawer from './MenuDrawer';
