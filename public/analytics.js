@@ -2,7 +2,7 @@
   'use strict';
 
   const CONFIG = {
-    trackingUrl: window.ANALYTICS_CONFIG?.apiUrl || 'https://snitwwqprnlopkywjmad.supabase.co/functions/v1/track',
+    trackingUrl: window.ANALYTICS_CONFIG?.apiUrl || 'https://gmvshvbfvqujlktpqllf.supabase.co/functions/v1/track',
     trackingId: window.ANALYTICS_CONFIG?.trackingId || null
   };
 
