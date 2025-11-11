@@ -65,7 +65,7 @@
   observer.observe(document, { subtree: true, childList: true });
 
   window.addEventListener('beforeunload', () => {
-    sendTracking(getPageData());
+    sendTracking({ ...getPageData(), is_unload: true });
   });
 
   function isFileDownload(url) {

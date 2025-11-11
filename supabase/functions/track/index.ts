@@ -106,7 +106,8 @@ Deno.serve(async (req: Request) => {
       link_text,
       link_type,
       event_name,
-      event_data
+      event_data,
+      is_unload
     } = data;
 
     if (!tracking_id || !session_id) {
@@ -242,6 +243,32 @@ Deno.serve(async (req: Request) => {
           engine_version,
           cpu_architecture
         });
+    }
+
+    let known_pageViews_id: string | null = null;
+    if (is_unload in data && data.is_unload === true) {
+      const { data: existingPageView } = await supabase
+        .from('page_views')
+        .select('id')
+        .eq('session_id', session_id)
+        .eq('page_url', page_url)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingPageView) {
+        known_pageViews_id = existingPageView.id;
+        await supabase.from('page_views').update({
+          unload_timestamp: new Date().toISOString()
+        }).eq('id', known_pageViews_id);
+      }
+      return new Response(
+        JSON.stringify({ success: true }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     await supabase.from('page_views').insert({
