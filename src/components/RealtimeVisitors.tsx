@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Activity } from 'lucide-react';
-import  StringToColor from './StringToColor'
+import  StringToColor from '../utils/StringToColor'
 import PageViewDrawer from './PageViewDrawer';
 
 interface RealtimeVisitorsProps {
@@ -82,7 +82,7 @@ export default function RealtimeVisitors({ siteId }: RealtimeVisitorsProps) {
                     {view.page_url}
                   </p>
                   <p className="text-xs text-slate-500 truncate mt-2">
-                    Session ID: <span style={{ color: StringToColor(view.session_id, true) }}>{view.session_id.split('_').pop()?.toUpperCase()}</span>
+                    Session ID: <span style={{ color: StringToColor(view.session_id) }}>{view.session_id.split('_').pop()?.toUpperCase()}</span>
                   </p>
                   <div className="flex items-center space-x-2 mt-2">
                     {view.country && (
