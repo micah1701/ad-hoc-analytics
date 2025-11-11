@@ -32,7 +32,7 @@ export default function RealtimeVisitors({ siteId }: RealtimeVisitorsProps) {
 
     const { data } = await supabase
       .from('page_views')
-      .select('session_id, page_url, page_title, timestamp, country, browser')
+      .select('session_id, page_url, page_title, timestamp')
       .eq('site_id', siteId)
       .gte('timestamp', fiveMinutesAgo.toISOString())
       .order('timestamp', { ascending: false })
