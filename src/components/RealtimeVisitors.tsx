@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Activity } from 'lucide-react';
+import  StringToColor from '../utils/StringToColor'
 import PageViewDrawer from './PageViewDrawer';
 
 interface RealtimeVisitorsProps {
@@ -12,8 +13,7 @@ interface RecentView {
   page_url: string;
   page_title: string | null;
   timestamp: string;
-  country: string | null;
-  browser: string | null;
+  exit_timestamp: string | null;
 }
 
 export default function RealtimeVisitors({ siteId }: RealtimeVisitorsProps) {
@@ -32,7 +32,7 @@ export default function RealtimeVisitors({ siteId }: RealtimeVisitorsProps) {
 
     const { data } = await supabase
       .from('page_views')
-      .select('session_id, page_url, page_title, timestamp, country, browser')
+      .select('session_id, page_url, page_title, timestamp, exit_timestamp')
       .eq('site_id', siteId)
       .gte('timestamp', fiveMinutesAgo.toISOString())
       .order('timestamp', { ascending: false })
@@ -79,22 +79,15 @@ export default function RealtimeVisitors({ siteId }: RealtimeVisitorsProps) {
                   <p className="text-xs text-slate-500 truncate mt-1">
                     {view.page_url}
                   </p>
-                  <div className="flex items-center space-x-2 mt-2">
-                    {view.country && (
-                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                        {view.country}
-                      </span>
-                    )}
-                    {view.browser && (
-                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                        {view.browser}
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-xs text-slate-500 truncate mt-2">
+                    Session ID: <span style={{ color: StringToColor(view.session_id) }}>{view.session_id.split('_').pop()?.toUpperCase()}</span>
+                  </p>                  
                 </div>
-                <span className="text-xs text-slate-400 ml-4 flex-shrink-0">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 mr-1 mt-1 ${view.exit_timestamp ? 'bg-red-500' : 'bg-green-500'}`} title={view.exit_timestamp ? 'Inactive' : 'Active'}></span>
+                <span className="text-xs text-slate-400 ml-1 flex-shrink-0">
                   {getTimeAgo(view.timestamp)}
                 </span>
+
               </div>
             </div>
           ))
