@@ -132,7 +132,8 @@ CREATE TABLE IF NOT EXISTS page_views (
   screen_width integer,
   screen_height integer,
   language text,
-  timestamp timestamptz DEFAULT now()  
+  timestamp timestamptz DEFAULT now(),
+  exit_timestamp timestamptz
 );
 
 -- Sessions table

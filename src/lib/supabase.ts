@@ -28,15 +28,13 @@ export interface PageView {
   referrer: string | null;
   user_agent: string | null;
   ip_address: string | null;
-  browser: string | null;
-  os: string | null;
-  device_type: string | null;
   country: string | null;
   city: string | null;
   screen_width: number | null;
   screen_height: number | null;
   language: string | null;
   timestamp: string;
+  exit_timestamp: string | null;
 }
 
 export interface Session {
