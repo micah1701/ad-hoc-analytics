@@ -58,7 +58,7 @@ Deno.serve(async (req)=>{
     });
   }
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('default_supabase_secret_key') ?? '');
     const data = await req.json();
     const { tracking_id, session_id, page_url, page_title, referrer, screen_width, screen_height, language, event_type, link_url, link_text, link_type, event_name, event_data, is_unload } = data;
     if (!tracking_id || !session_id) {
