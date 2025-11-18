@@ -27,7 +27,14 @@ export default function Dashboard() {
     if (!error && data) {
       setSites(data);
       if (data.length > 0 && !selectedSite) {
-        setSelectedSite(data[0]);
+        // Check for default site first
+        const defaultSite = data.find(site => site.is_default === true);
+        if (defaultSite) {
+          setSelectedSite(defaultSite);
+        } else {
+          // Fallback to first site if no default is set
+          setSelectedSite(data[0]);
+        }
       }
     }
     setLoading(false);
