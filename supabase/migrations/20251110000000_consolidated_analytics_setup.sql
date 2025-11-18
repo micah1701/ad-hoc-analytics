@@ -320,18 +320,20 @@ CREATE POLICY "Users can view link clicks for their sites"
 -- =====================================================
 
 -- Function to ensure only one default site per user
-CREATE OR REPLACE FUNCTION set_others_sites_default_to_false()
-   RETURNS TRIGGER AS $$
-   BEGIN
-       IF NEW.is_default = TRUE THEN
-           UPDATE sites
-           SET is_default = FALSE
-           WHERE user_id = NEW.user_id
-             AND id <> NEW.id; -- Exclude the currently updated row
-       END IF;
-       RETURN NEW;
-   END;
-   $$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION public.set_others_sites_default_to_false()
+  RETURNS TRIGGER
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    IF NEW.is_default = TRUE THEN
+      UPDATE public.sites
+      SET is_default = FALSE
+      WHERE user_id = NEW.user_id
+        AND id <> NEW.id;
+    END IF;
+    RETURN NEW;
+  END;
+  $$;
 
 -- Function to delete all analytics data for a site
 CREATE OR REPLACE FUNCTION delete_site_analytics_data(p_site_id uuid)
