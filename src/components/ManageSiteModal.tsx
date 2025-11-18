@@ -16,6 +16,7 @@ export default function ManageSiteModal({ site, onClose, onSiteUpdated }: Manage
   const [siteName, setSiteName] = useState(site.name);
   const [siteDomain, setSiteDomain] = useState(site.domain);
   const [siteActive, setSiteActive] = useState(site.active);
+  const [isDefault, setIsDefault] = useState(site.is_default || false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -71,7 +72,8 @@ export default function ManageSiteModal({ site, onClose, onSiteUpdated }: Manage
     const { error } = await updateSite(site.id, {
       name: siteName.trim(),
       domain: siteDomain.trim(),
-      active: siteActive
+      active: siteActive,
+      is_default: isDefault
     });
 
     setSaving(false);
@@ -324,6 +326,27 @@ window.analytics.trackEvent('search', {
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                       siteActive ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div>
+                  <h3 className="font-medium text-slate-900">Default Site</h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Automatically select this site when opening the dashboard. Only one site can be default.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsDefault(!isDefault)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    isDefault ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isDefault ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
