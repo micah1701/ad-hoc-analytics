@@ -16,6 +16,7 @@
   - `tracking_id` (text, unique) - Public tracking identifier for embed code
   - `active` (boolean) - Whether tracking is enabled
   - `use_uaparser` (boolean) - Enable enhanced browser detection with UAParser.js
+  - `is_default` (boolean) - Whether this is the default site for the user (only one per user)
   - `created_at` (timestamptz) - When site was registered
 
   ### 2. `page_views`
@@ -97,8 +98,12 @@
   - Query performance optimized for real-time analytics
 
   ## Functions
+  - `set_others_sites_default_to_false()` - Ensures only one default site per user
   - `delete_site_analytics_data(uuid)` - Safely delete all analytics for a site
   - `get_site_analytics_counts(uuid)` - Get record counts without deleting
+
+  ## Triggers
+  - `trigger_set_others_sites_default_to_false` - Maintains unique default site per user
 */
 
 -- =====================================================
@@ -114,6 +119,7 @@ CREATE TABLE IF NOT EXISTS sites (
   tracking_id text UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(12), 'base64'),
   active boolean DEFAULT true,
   use_uaparser boolean DEFAULT true,
+  is_default boolean DEFAULT NULL,
   created_at timestamptz DEFAULT now()
 );
 
@@ -313,6 +319,20 @@ CREATE POLICY "Users can view link clicks for their sites"
 -- FUNCTIONS
 -- =====================================================
 
+-- Function to ensure only one default site per user
+CREATE OR REPLACE FUNCTION set_others_sites_default_to_false()
+   RETURNS TRIGGER AS $$
+   BEGIN
+       IF NEW.is_default = TRUE THEN
+           UPDATE sites
+           SET is_default = FALSE
+           WHERE user_id = NEW.user_id
+             AND id <> NEW.id; -- Exclude the currently updated row
+       END IF;
+       RETURN NEW;
+   END;
+   $$ LANGUAGE plpgsql;
+
 -- Function to delete all analytics data for a site
 CREATE OR REPLACE FUNCTION delete_site_analytics_data(p_site_id uuid)
 RETURNS jsonb
@@ -456,3 +476,18 @@ $$;
 
 -- Grant execute permission to authenticated users
 GRANT EXECUTE ON FUNCTION get_site_analytics_counts(uuid) TO authenticated;
+
+-- =====================================================
+-- TRIGGERS
+-- =====================================================
+
+-- Trigger to ensure only one default site per user
+CREATE TRIGGER trigger_set_others_sites_default_to_false
+    BEFORE UPDATE OF is_default ON sites
+    FOR EACH ROW
+    EXECUTE FUNCTION set_others_sites_default_to_false();
+
+CREATE TRIGGER trigger_set_others_sites_default_to_false_insert
+    BEFORE INSERT ON sites
+    FOR EACH ROW
+    EXECUTE FUNCTION set_others_sites_default_to_false();
