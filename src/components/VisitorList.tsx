@@ -38,6 +38,7 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
+  const [copiedIpAddress, setCopiedIpAddress] = useState<string | null>(null);
 
   useEffect(() => {
     loadVisitors();
@@ -148,6 +149,16 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
       await navigator.clipboard.writeText(sessionId);
       setCopiedSessionId(sessionId);
       setTimeout(() => setCopiedSessionId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const copyIpToClipboard = async (ipAddress: string) => {
+    try {
+      await navigator.clipboard.writeText(ipAddress);
+      setCopiedIpAddress(ipAddress);
+      setTimeout(() => setCopiedIpAddress(null), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
@@ -297,8 +308,27 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
                             {visitor.page_count}
                           </button>
                         </td>
-                        <td className="py-4 px-4 text-slate-900 font-mono text-sm">
-                          {visitor.ip_address || '-'}
+                        <td className="py-4 px-4">
+                          {visitor.ip_address ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-900 font-mono text-sm">
+                                {visitor.ip_address}
+                              </span>
+                              <button
+                                onClick={() => copyIpToClipboard(visitor.ip_address!)}
+                                className="text-slate-400 hover:text-slate-600 transition"
+                                title="Copy IP address"
+                              >
+                                {copiedIpAddress === visitor.ip_address ? (
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
                         </td>
                         <td className="py-4 px-4 text-slate-900">
                           {formatDuration(visitor.avg_duration)}
