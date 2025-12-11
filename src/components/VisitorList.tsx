@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { X, ArrowUpDown, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import PageViewDrawer from './PageViewDrawer';
 
@@ -13,7 +13,7 @@ interface VisitorListProps {
 interface VisitorStats {
   session_id: string;
   page_count: number;
-  total_sessions: number;
+  ip_address: string | null;
   avg_duration: number;
   first_seen: string;
   last_seen: string;
@@ -28,7 +28,7 @@ interface VisitorStats {
   country: string | null;
 }
 
-type SortField = 'page_count' | 'total_sessions' | 'avg_duration' | 'last_seen';
+type SortField = 'page_count' | 'avg_duration' | 'last_seen';
 type SortDirection = 'asc' | 'desc';
 
 export default function VisitorList({ siteId, timeRange, onClose, filterActiveOnly = false }: VisitorListProps) {
@@ -37,6 +37,8 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
   const [sortField, setSortField] = useState<SortField>('last_seen');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
+  const [copiedIpAddress, setCopiedIpAddress] = useState<string | null>(null);
 
   useEffect(() => {
     loadVisitors();
@@ -64,44 +66,44 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
 
     const { data: sessions } = await query;
 
-    if (sessions) {
-      const visitorMap = new Map<string, VisitorStats>();
+    if (sessions && sessions.length > 0) {
+      const sessionIds = sessions.map(s => s.session_id);
 
-      sessions.forEach(session => {
-        const existing = visitorMap.get(session.session_id);
+      const { data: pageViews } = await supabase
+        .from('page_views')
+        .select('session_id, ip_address, timestamp')
+        .eq('site_id', siteId)
+        .in('session_id', sessionIds)
+        .order('timestamp', { ascending: true });
 
-        if (existing) {
-          existing.total_sessions += 1;
-          existing.page_count += session.page_count;
-          existing.avg_duration = Math.round(
-            (existing.avg_duration * (existing.total_sessions - 1) + session.duration_seconds) /
-            existing.total_sessions
-          );
-          if (new Date(session.last_seen) > new Date(existing.last_seen)) {
-            existing.last_seen = session.last_seen;
+      const ipMap = new Map<string, string>();
+      if (pageViews) {
+        pageViews.forEach(pv => {
+          if (!ipMap.has(pv.session_id) && pv.ip_address) {
+            ipMap.set(pv.session_id, pv.ip_address);
           }
-        } else {
-          visitorMap.set(session.session_id, {
-            session_id: session.session_id,
-            page_count: session.page_count,
-            total_sessions: 1,
-            avg_duration: session.duration_seconds,
-            first_seen: session.first_seen,
-            last_seen: session.last_seen,
-            browser: session.browser,
-            browser_version: session.browser_version,
-            os: session.os,
-            os_version: session.os_version,
-            device_vendor: session.device_vendor,
-            device_model: session.device_model,
-            engine_name: session.engine_name,
-            cpu_architecture: session.cpu_architecture,
-            country: session.country
-          });
-        }
-      });
+        });
+      }
 
-      setVisitors(Array.from(visitorMap.values()));
+      const visitorStats: VisitorStats[] = sessions.map(session => ({
+        session_id: session.session_id,
+        page_count: session.page_count,
+        ip_address: ipMap.get(session.session_id) || null,
+        avg_duration: session.duration_seconds,
+        first_seen: session.first_seen,
+        last_seen: session.last_seen,
+        browser: session.browser,
+        browser_version: session.browser_version,
+        os: session.os,
+        os_version: session.os_version,
+        device_vendor: session.device_vendor,
+        device_model: session.device_model,
+        engine_name: session.engine_name,
+        cpu_architecture: session.cpu_architecture,
+        country: session.country
+      }));
+
+      setVisitors(visitorStats);
     }
     setLoading(false);
   };
@@ -140,6 +142,26 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString();
+  };
+
+  const copyToClipboard = async (sessionId: string) => {
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setCopiedSessionId(sessionId);
+      setTimeout(() => setCopiedSessionId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const copyIpToClipboard = async (ipAddress: string) => {
+    try {
+      await navigator.clipboard.writeText(ipAddress);
+      setCopiedIpAddress(ipAddress);
+      setTimeout(() => setCopiedIpAddress(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -195,14 +217,8 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
                           <SortIcon field="page_count" />
                         </div>
                       </th>
-                      <th
-                        className="text-left py-3 px-4 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50"
-                        onClick={() => handleSort('total_sessions')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Sessions</span>
-                          <SortIcon field="total_sessions" />
-                        </div>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">
+                        IP Address
                       </th>
                       <th
                         className="text-left py-3 px-4 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50"
@@ -232,9 +248,22 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
                       >
                         <td className="py-4 px-4">
                           <div className="flex flex-col">
-                            <span className="text-xs font-mono text-slate-500">
-                              {visitor.session_id.substring(0, 20)}...
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono text-slate-500">
+                                {visitor.session_id.substring(0, 20)}...
+                              </span>
+                              <button
+                                onClick={() => copyToClipboard(visitor.session_id)}
+                                className="text-slate-400 hover:text-slate-600 transition"
+                                title="Copy full session ID"
+                              >
+                                {copiedSessionId === visitor.session_id ? (
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
                             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                               {visitor.browser && (
                                 <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
@@ -279,8 +308,27 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
                             {visitor.page_count}
                           </button>
                         </td>
-                        <td className="py-4 px-4 text-slate-900">
-                          {visitor.total_sessions}
+                        <td className="py-4 px-4">
+                          {visitor.ip_address ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-900 font-mono text-sm">
+                                {visitor.ip_address}
+                              </span>
+                              <button
+                                onClick={() => copyIpToClipboard(visitor.ip_address!)}
+                                className="text-slate-400 hover:text-slate-600 transition"
+                                title="Copy IP address"
+                              >
+                                {copiedIpAddress === visitor.ip_address ? (
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
                         </td>
                         <td className="py-4 px-4 text-slate-900">
                           {formatDuration(visitor.avg_duration)}
