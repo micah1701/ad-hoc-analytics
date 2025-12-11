@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { X, ArrowUpDown, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import PageViewDrawer from './PageViewDrawer';
 
@@ -37,6 +37,7 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
   const [sortField, setSortField] = useState<SortField>('last_seen');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     loadVisitors();
@@ -142,6 +143,16 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
     return date.toLocaleString();
   };
 
+  const copyToClipboard = async (sessionId: string) => {
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setCopiedSessionId(sessionId);
+      setTimeout(() => setCopiedSessionId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="w-4 h-4 text-slate-400" />;
     return sortDirection === 'asc'
@@ -226,9 +237,22 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
                       >
                         <td className="py-4 px-4">
                           <div className="flex flex-col">
-                            <span className="text-xs font-mono text-slate-500">
-                              {visitor.session_id.substring(0, 20)}...
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono text-slate-500">
+                                {visitor.session_id.substring(0, 20)}...
+                              </span>
+                              <button
+                                onClick={() => copyToClipboard(visitor.session_id)}
+                                className="text-slate-400 hover:text-slate-600 transition"
+                                title="Copy full session ID"
+                              >
+                                {copiedSessionId === visitor.session_id ? (
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
                             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                               {visitor.browser && (
                                 <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
