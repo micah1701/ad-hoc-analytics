@@ -152,9 +152,10 @@ Deno.serve(async (req)=>{
     const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page').eq('session_id', session_id).maybeSingle();
     if (existingSession) {
       const duration = Math.floor((Date.now() - new Date(existingSession.first_seen).getTime()) / 1000);
+      const pageCountIncrement = (is_unload && is_unload === true) ? 0 : 1;
       await supabase.from('sessions').update({
         last_seen: new Date().toISOString(),
-        page_count: existingSession.page_count + 1,
+        page_count: existingSession.page_count + pageCountIncrement,
         duration_seconds: duration,
         exit_page: page_url
       }).eq('session_id', session_id);
