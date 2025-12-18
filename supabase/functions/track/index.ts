@@ -72,7 +72,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: site } = await supabase.from('sites').select('id, active, use_uaparser').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
+    const { data: site } = await supabase.from('adhoc_analytics.sites').select('id, active, use_uaparser').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
     if (!site) {
       return new Response(JSON.stringify({
         error: 'Invalid tracking ID or inactive site'
@@ -89,7 +89,7 @@ Deno.serve(async (req)=>{
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
     if (event_name) {
-      await supabase.from('events').insert({
+      await supabase.from('adhoc_analytics.events').insert({
         site_id: site.id,
         session_id,
         event_name,
@@ -118,7 +118,7 @@ Deno.serve(async (req)=>{
           }
         });
       }
-      await supabase.from('link_clicks').insert({
+      await supabase.from('adhoc_analytics.link_clicks').insert({
         site_id: site.id,
         session_id,
         page_url: page_url || '',
@@ -149,18 +149,18 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page').eq('session_id', session_id).maybeSingle();
+    const { data: existingSession } = await supabase.from('adhoc_analytics.sessions').select('id, first_seen, page_count, entry_page').eq('session_id', session_id).maybeSingle();
     if (existingSession) {
       const duration = Math.floor((Date.now() - new Date(existingSession.first_seen).getTime()) / 1000);
       const pageCountIncrement = (is_unload && is_unload === true) ? 0 : 1;
-      await supabase.from('sessions').update({
+      await supabase.from('adhoc_analytics.sessions').update({
         last_seen: new Date().toISOString(),
         page_count: existingSession.page_count + pageCountIncrement,
         duration_seconds: duration,
         exit_page: page_url
       }).eq('session_id', session_id);
     } else {
-      await supabase.from('sessions').insert({
+      await supabase.from('adhoc_analytics.sessions').insert({
         site_id: site.id,
         session_id,
         first_seen: new Date().toISOString(),
@@ -183,11 +183,11 @@ Deno.serve(async (req)=>{
       });
     }
     if (is_unload && is_unload === true) {
-      const { data: existingPageView } = await supabase.from('page_views').select('id').eq('session_id', session_id).eq('page_url', page_url).order('timestamp', {
+      const { data: existingPageView } = await supabase.from('adhoc_analytics.page_views').select('id').eq('session_id', session_id).eq('page_url', page_url).order('timestamp', {
         ascending: false
       }).limit(1).maybeSingle();
       if (existingPageView) {
-        await supabase.from('page_views').update({
+        await supabase.from('adhoc_analytics.page_views').update({
           exit_timestamp: new Date().toISOString()
         }).eq('id', existingPageView.id);
       }
@@ -201,7 +201,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    await supabase.from('page_views').insert({
+    await supabase.from('adhoc_analytics.page_views').insert({
       site_id: site.id,
       session_id,
       page_url,
