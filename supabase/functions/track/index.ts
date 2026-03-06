@@ -5,6 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey'
 };
+
+function isIpInCidr(ip: string, cidr: string): boolean {
+  const [range, bits] = cidr.split('/');
+  const mask = bits ? ~(2 ** (32 - parseInt(bits)) - 1) : 0xffffffff;
+
+  const ipNum = ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+  const rangeNum = range.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+
+  return (ipNum & mask) === (rangeNum & mask);
+}
 function parseUserAgent(ua, useUAParser = true) {
   if (!useUAParser) {
     const browser = ua.match(/(Chrome|Firefox|Safari|Edge|Opera)\/(\d+)/);
@@ -74,7 +84,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: site } = await supabase.from('sites').select('id, active, use_uaparser').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
+    const { data: site } = await supabase.from('sites').select('id, active, use_uaparser, excluded_ips').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
     if (!site) {
       return new Response(JSON.stringify({
         error: 'Invalid tracking ID or inactive site'
@@ -90,6 +100,29 @@ Deno.serve(async (req)=>{
     const parsedUA = parseUserAgent(userAgent, site.use_uaparser ?? true);
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
+
+    if (ip && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
+      const isExcluded = site.excluded_ips.some((excludedIp: string) => {
+        if (excludedIp.includes('/')) {
+          return isIpInCidr(ip, excludedIp);
+        } else {
+          return ip === excludedIp;
+        }
+      });
+
+      if (isExcluded) {
+        return new Response(JSON.stringify({
+          success: true,
+          excluded: true
+        }), {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+    }
     if (event_name) {
       await supabase.from('events').insert({
         site_id: site.id,
