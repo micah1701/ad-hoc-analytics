@@ -55,7 +55,7 @@ export default function Analytics({ site }: AnalyticsProps) {
 
     const { data: sessions } = await supabase
       .from('sessions')
-      .select('duration_seconds')
+      .select('duration_seconds, page_count')
       .eq('site_id', site.id)
       .gte('first_seen', cutoff.toISOString());
 
@@ -68,8 +68,19 @@ export default function Analytics({ site }: AnalyticsProps) {
       .eq('site_id', site.id)
       .gte('last_seen', activeTime.toISOString());
 
-    const avgDuration = sessions && sessions.length > 0
-      ? Math.round(sessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0) / sessions.length)
+    const validSessions = sessions?.filter(s => {
+      const duration = s.duration_seconds || 0;
+      const pageCount = s.page_count || 0;
+
+      if (duration === 0) return false;
+
+      if (duration > 3600 && pageCount === 1) return false;
+
+      return true;
+    }) || [];
+
+    const avgDuration = validSessions.length > 0
+      ? Math.round(validSessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0) / validSessions.length)
       : 0;
 
     setStats({
