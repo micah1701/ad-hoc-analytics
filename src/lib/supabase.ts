@@ -19,6 +19,7 @@ export interface Site {
   tracking_id: string;
   active: boolean;
   is_default: boolean | null;
+  excluded_ips: string[] | null;
   created_at: string;
 }
 
@@ -87,7 +88,7 @@ export interface DeleteAnalyticsResult {
   error?: string;
 }
 
-export async function updateSite(siteId: string, updates: { name?: string; domain?: string; active?: boolean; is_default?: boolean }) {
+export async function updateSite(siteId: string, updates: { name?: string; domain?: string; active?: boolean; is_default?: boolean; excluded_ips?: string[] }) {
   return await supabase
     .from('sites')
     .update(updates)
