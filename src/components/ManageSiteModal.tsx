@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Code, Settings, AlertTriangle, Copy, Check, Save, Loader2, Trash2 } from 'lucide-react';
+import { X, Code, Settings, TriangleAlert as AlertTriangle, Copy, Check, Save, Loader as Loader2, Trash2 } from 'lucide-react';
 import { Site, updateSite, getAnalyticsCounts, deleteSiteAnalytics, AnalyticsCounts } from '../lib/supabase';
 
 interface ManageSiteModalProps {
