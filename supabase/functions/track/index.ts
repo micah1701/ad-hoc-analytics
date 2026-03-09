@@ -1,10 +1,35 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { UAParser } from 'npm:ua-parser-js@2.0.6';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey'
 };
+
+async function getGeolocation(ip: string, licenseKey: string): Promise<{ country: string | null; city: string | null }> {
+  try {
+    const response = await fetch(`https://geoip.maxmind.com/geoip/v2.1/city/${ip}`, {
+      headers: {
+        'Authorization': `Basic ${btoa(`${licenseKey}:`)}`
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`MaxMind API error: ${response.status}`);
+      return { country: null, city: null };
+    }
+
+    const data = await response.json();
+    return {
+      country: data.country?.iso_code || null,
+      city: data.city?.names?.en || null
+    };
+  } catch (error) {
+    console.error('Error fetching geolocation:', error);
+    return { country: null, city: null };
+  }
+}
 
 function isIpInCidr(ip: string, cidr: string): boolean {
   const [range, bits] = cidr.split('/');
@@ -101,6 +126,16 @@ Deno.serve(async (req)=>{
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
 
+    const maxmindKey = Deno.env.get('MAXMIND_LICENSE_KEY') || '';
+    let country = null;
+    let city = null;
+
+    if (ip && maxmindKey) {
+      const geo = await getGeolocation(ip, maxmindKey);
+      country = geo.country;
+      city = geo.city;
+    }
+
     if (ip && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
       const isExcluded = site.excluded_ips.some((excludedIp: string) => {
         if (excludedIp.includes('/')) {
@@ -161,7 +196,7 @@ Deno.serve(async (req)=>{
         link_text: link_text || null,
         link_type,
         timestamp: new Date().toISOString(),
-        country: null
+        country
       });
       return new Response(JSON.stringify({
         success: true
@@ -248,7 +283,8 @@ Deno.serve(async (req)=>{
       screen_height,
       language,
       timestamp: new Date().toISOString(),
-      country: null
+      country,
+      city
     });
     return new Response(JSON.stringify({
       success: true
