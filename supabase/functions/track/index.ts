@@ -7,11 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey'
 };
 
-async function getGeolocation(ip: string, licenseKey: string): Promise<{ country: string | null; city: string | null }> {
+async function getGeolocation(ip: string, accountId: string, licenseKey: string): Promise<{ country: string | null; city: string | null }> {
   try {
-    const response = await fetch(`https://geoip.maxmind.com/geoip/v2.1/city/${ip}`, {
+    const response = await fetch(`https://geolite.info/geoip/v2.1/city/${ip}`, {
       headers: {
-        'Authorization': `Basic ${btoa(`${licenseKey}:`)}`
+        'Authorization': `Basic ${btoa(`${accountId}:${licenseKey}`)}`
       }
     });
 
@@ -126,12 +126,13 @@ Deno.serve(async (req)=>{
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
 
+    const maxmindAccountId = Deno.env.get('MAXMIND_ACCOUNT_ID') || '';
     const maxmindKey = Deno.env.get('MAXMIND_LICENSE_KEY') || '';
     let country = null;
     let city = null;
 
-    if (ip && maxmindKey) {
-      const geo = await getGeolocation(ip, maxmindKey);
+    if (ip && maxmindAccountId && maxmindKey) {
+      const geo = await getGeolocation(ip, maxmindAccountId, maxmindKey);
       country = geo.country;
       city = geo.city;
     }
