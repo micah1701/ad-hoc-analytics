@@ -9,7 +9,7 @@ const corsHeaders = {
 
 async function getGeolocation(ip: string, accountId: string, licenseKey: string): Promise<{ country: string | null; city: string | null }> {
   try {
-    const response = await fetch(`https://geoip.maxmind.com/geoip/v2.1/city/${ip}`, {
+    const response = await fetch(`https://geolite.info/geoip/v2.1/city/${ip}`, {
       headers: {
         'Authorization': `Basic ${btoa(`${accountId}:${licenseKey}`)}`
       }
