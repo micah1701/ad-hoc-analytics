@@ -21,9 +21,17 @@ async function getGeolocation(ip: string, accountId: string, licenseKey: string)
     }
 
     const data = await response.json();
+    const cityName = data.city?.names?.en || null;
+    const subdivisionCode = data.subdivisions?.[0]?.iso_code || null;
+
+    let city = cityName;
+    if (cityName && subdivisionCode) {
+      city = `${cityName}, ${subdivisionCode}`;
+    }
+
     return {
       country: data.country?.iso_code || null,
-      city: data.city?.names?.en || null
+      city
     };
   } catch (error) {
     console.error('Error fetching geolocation:', error);
