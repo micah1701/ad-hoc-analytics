@@ -21,9 +21,17 @@ async function getGeolocation(ip: string, accountId: string, licenseKey: string)
     }
 
     const data = await response.json();
+    const cityName = data.city?.names?.en || null;
+    const subdivisionCode = data.subdivisions?.[0]?.iso_code || null;
+
+    let city = cityName;
+    if (cityName && subdivisionCode) {
+      city = `${cityName}, ${subdivisionCode}`;
+    }
+
     return {
       country: data.country?.iso_code || null,
-      city: data.city?.names?.en || null
+      city
     };
   } catch (error) {
     console.error('Error fetching geolocation:', error);
@@ -126,17 +134,6 @@ Deno.serve(async (req)=>{
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
 
-    const maxmindAccountId = Deno.env.get('MAXMIND_ACCOUNT_ID') || '';
-    const maxmindKey = Deno.env.get('MAXMIND_LICENSE_KEY') || '';
-    let country = null;
-    let city = null;
-
-    if (ip && maxmindAccountId && maxmindKey) {
-      const geo = await getGeolocation(ip, maxmindAccountId, maxmindKey);
-      country = geo.country;
-      city = geo.city;
-    }
-
     if (ip && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
       const isExcluded = site.excluded_ips.some((excludedIp: string) => {
         if (excludedIp.includes('/')) {
@@ -189,6 +186,10 @@ Deno.serve(async (req)=>{
           }
         });
       }
+
+      const { data: session } = await supabase.from('sessions').select('country').eq('session_id', session_id).maybeSingle();
+      const country = session?.country || null;
+
       await supabase.from('link_clicks').insert({
         site_id: site.id,
         session_id,
@@ -220,7 +221,11 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page').eq('session_id', session_id).maybeSingle();
+    const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page, country, city').eq('session_id', session_id).maybeSingle();
+
+    let country = null;
+    let city = null;
+
     if (existingSession) {
       const duration = Math.floor((Date.now() - new Date(existingSession.first_seen).getTime()) / 1000);
       const pageCountIncrement = (is_unload && is_unload === true) ? 0 : 1;
@@ -230,7 +235,19 @@ Deno.serve(async (req)=>{
         duration_seconds: duration,
         exit_page: page_url
       }).eq('session_id', session_id);
+
+      country = existingSession.country;
+      city = existingSession.city;
     } else {
+      const maxmindAccountId = Deno.env.get('MAXMIND_ACCOUNT_ID') || '';
+      const maxmindKey = Deno.env.get('MAXMIND_LICENSE_KEY') || '';
+
+      if (ip && maxmindAccountId && maxmindKey) {
+        const geo = await getGeolocation(ip, maxmindAccountId, maxmindKey);
+        country = geo.country;
+        city = geo.city;
+      }
+
       await supabase.from('sessions').insert({
         site_id: site.id,
         session_id,
@@ -250,7 +267,9 @@ Deno.serve(async (req)=>{
         device_model,
         engine_name,
         engine_version,
-        cpu_architecture
+        cpu_architecture,
+        country,
+        city
       });
     }
     if (is_unload && is_unload === true) {
