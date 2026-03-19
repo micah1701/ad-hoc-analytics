@@ -14,6 +14,7 @@ interface VisitorStats {
   session_id: string;
   page_count: number;
   ip_address: string | null;
+  city: string | null;
   avg_duration: number;
   first_seen: string;
   last_seen: string;
@@ -71,16 +72,20 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
 
       const { data: pageViews } = await supabase
         .from('page_views')
-        .select('session_id, ip_address, timestamp')
+        .select('session_id, ip_address, city, timestamp')
         .eq('site_id', siteId)
         .in('session_id', sessionIds)
         .order('timestamp', { ascending: true });
 
       const ipMap = new Map<string, string>();
+      const cityMap = new Map<string, string>();
       if (pageViews) {
         pageViews.forEach(pv => {
           if (!ipMap.has(pv.session_id) && pv.ip_address) {
             ipMap.set(pv.session_id, pv.ip_address);
+          }
+          if (!cityMap.has(pv.session_id) && pv.city) {
+            cityMap.set(pv.session_id, pv.city);
           }
         });
       }
@@ -89,6 +94,7 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
         session_id: session.session_id,
         page_count: session.page_count,
         ip_address: ipMap.get(session.session_id) || null,
+        city: cityMap.get(session.session_id) || null,
         avg_duration: session.duration_seconds,
         first_seen: session.first_seen,
         last_seen: session.last_seen,
@@ -310,21 +316,28 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
                         </td>
                         <td className="py-4 px-4">
                           {visitor.ip_address ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-900 font-mono text-sm">
-                                {visitor.ip_address}
-                              </span>
-                              <button
-                                onClick={() => copyIpToClipboard(visitor.ip_address!)}
-                                className="text-slate-400 hover:text-slate-600 transition"
-                                title="Copy IP address"
-                              >
-                                {copiedIpAddress === visitor.ip_address ? (
-                                  <Check className="w-3.5 h-3.5 text-green-600" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-900 font-mono text-sm">
+                                  {visitor.ip_address}
+                                </span>
+                                <button
+                                  onClick={() => copyIpToClipboard(visitor.ip_address!)}
+                                  className="text-slate-400 hover:text-slate-600 transition"
+                                  title="Copy IP address"
+                                >
+                                  {copiedIpAddress === visitor.ip_address ? (
+                                    <Check className="w-3.5 h-3.5 text-green-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                              {visitor.city && (
+                                <span className="text-slate-500 text-xs mt-1">
+                                  {visitor.city}
+                                </span>
+                              )}
                             </div>
                           ) : (
                             <span className="text-slate-400">-</span>

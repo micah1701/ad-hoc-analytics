@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Code, Settings, AlertTriangle, Copy, Check, Save, Loader2, Trash2 } from 'lucide-react';
+import { X, Code, Settings, TriangleAlert as AlertTriangle, Copy, Check, Save, Loader as Loader2, Trash2 } from 'lucide-react';
 import { Site, updateSite, getAnalyticsCounts, deleteSiteAnalytics, AnalyticsCounts } from '../lib/supabase';
 
 interface ManageSiteModalProps {
@@ -17,6 +17,7 @@ export default function ManageSiteModal({ site, onClose, onSiteUpdated }: Manage
   const [siteDomain, setSiteDomain] = useState(site.domain);
   const [siteActive, setSiteActive] = useState(site.active);
   const [isDefault, setIsDefault] = useState(site.is_default || false);
+  const [excludedIps, setExcludedIps] = useState(site.excluded_ips?.join('\n') || '');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -69,11 +70,17 @@ export default function ManageSiteModal({ site, onClose, onSiteUpdated }: Manage
     setSaveError('');
     setSaveSuccess(false);
 
+    const excludedIpsArray = excludedIps
+      .split('\n')
+      .map(ip => ip.trim())
+      .filter(ip => ip.length > 0);
+
     const { error } = await updateSite(site.id, {
       name: siteName.trim(),
       domain: siteDomain.trim(),
       active: siteActive,
-      is_default: isDefault
+      is_default: isDefault,
+      excluded_ips: excludedIpsArray
     });
 
     setSaving(false);
@@ -350,6 +357,30 @@ window.analytics.trackEvent('search', {
                     }`}
                   />
                 </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Exclude IP Addresses
+                </label>
+                <textarea
+                  value={excludedIps}
+                  onChange={(e) => setExcludedIps(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none font-mono text-sm"
+                  placeholder="192.168.1.1&#10;10.0.0.0/24&#10;203.0.113.42"
+                  rows={5}
+                />
+                <p className="text-xs text-slate-500 mt-2">
+                  Enter one IP address or CIDR range per line. Traffic from these IPs will not be tracked.
+                </p>
+                <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-xs text-slate-600 mb-1 font-medium">Examples:</p>
+                  <ul className="text-xs text-slate-600 space-y-0.5 list-disc list-inside">
+                    <li><code className="bg-white px-1 py-0.5 rounded">192.168.1.1</code> - Exclude a single IP address</li>
+                    <li><code className="bg-white px-1 py-0.5 rounded">10.0.0.0/24</code> - Exclude IP range (10.0.0.0 to 10.0.0.255)</li>
+                    <li><code className="bg-white px-1 py-0.5 rounded">203.0.113.0/28</code> - Exclude smaller range (16 addresses)</li>
+                  </ul>
+                </div>
               </div>
 
               {saveSuccess && (

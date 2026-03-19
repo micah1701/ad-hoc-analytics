@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { UAParser } from 'npm:ua-parser-js@2.0.6';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -118,6 +119,15 @@ async function lookupGeo(ip, usePaidGeo, supabase) {
   }
 }
 
+function isIpInCidr(ip: string, cidr: string): boolean {
+  const [range, bits] = cidr.split('/');
+  const mask = bits ? ~(2 ** (32 - parseInt(bits)) - 1) : 0xffffffff;
+
+  const ipNum = ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+  const rangeNum = range.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+
+  return (ipNum & mask) === (rangeNum & mask);
+}
 function parseUserAgent(ua, useUAParser = true) {
   if (!useUAParser) {
     const browser = ua.match(/(Chrome|Firefox|Safari|Edge|Opera)\/(\d+)/);
@@ -187,7 +197,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: site } = await supabase.from('sites').select('id, active, use_uaparser, use_paid_geo').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
+    const { data: site } = await supabase.from('sites').select('id, active, use_uaparser, excluded_ips, use_paid_geo').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
     if (!site) {
       return new Response(JSON.stringify({
         error: 'Invalid tracking ID or inactive site'
@@ -204,6 +214,29 @@ Deno.serve(async (req)=>{
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
     const geo = await lookupGeo(ip, site.use_paid_geo ?? false, supabase);
+    
+    if (ip && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
+      const isExcluded = site.excluded_ips.some((excludedIp: string) => {
+        if (excludedIp.includes('/')) {
+          return isIpInCidr(ip, excludedIp);
+        } else {
+          return ip === excludedIp;
+        }
+      });
+
+      if (isExcluded) {
+        return new Response(JSON.stringify({
+          success: true,
+          excluded: true
+        }), {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+    }
     if (event_name) {
       await supabase.from('events').insert({
         site_id: site.id,
@@ -234,6 +267,10 @@ Deno.serve(async (req)=>{
           }
         });
       }
+
+      const { data: session } = await supabase.from('sessions').select('country').eq('session_id', session_id).maybeSingle();
+      const country = session?.country || null;
+
       await supabase.from('link_clicks').insert({
         site_id: site.id,
         session_id,
@@ -265,7 +302,11 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page').eq('session_id', session_id).maybeSingle();
+    const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page, country, city').eq('session_id', session_id).maybeSingle();
+
+    let country = null;
+    let city = null;
+
     if (existingSession) {
       const duration = Math.floor((Date.now() - new Date(existingSession.first_seen).getTime()) / 1000);
       const pageCountIncrement = (is_unload && is_unload === true) ? 0 : 1;
@@ -275,7 +316,19 @@ Deno.serve(async (req)=>{
         duration_seconds: duration,
         exit_page: page_url
       }).eq('session_id', session_id);
+
+      country = existingSession.country;
+      city = existingSession.city;
     } else {
+      const maxmindAccountId = Deno.env.get('MAXMIND_ACCOUNT_ID') || '';
+      const maxmindKey = Deno.env.get('MAXMIND_LICENSE_KEY') || '';
+
+      if (ip && maxmindAccountId && maxmindKey) {
+        const geo = await getGeolocation(ip, maxmindAccountId, maxmindKey);
+        country = geo.country;
+        city = geo.city;
+      }
+
       await supabase.from('sessions').insert({
         site_id: site.id,
         session_id,
