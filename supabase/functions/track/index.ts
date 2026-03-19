@@ -5,6 +5,119 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey'
 };
+
+function flattenMaxMindResponse(data) {
+  const subdivisions = (data.subdivisions || []).map((s) => ({
+    iso_code: s.iso_code || null,
+    name: s.names?.en || null
+  }));
+  return {
+    continent_code: data.continent?.code || null,
+    continent_name: data.continent?.names?.en || null,
+    country_iso_code: data.country?.iso_code || null,
+    country_name: data.country?.names?.en || null,
+    country_is_eu: data.country?.is_in_european_union || false,
+    registered_country_iso_code: data.registered_country?.iso_code || null,
+    registered_country_name: data.registered_country?.names?.en || null,
+    city_geoname_id: data.city?.geoname_id || null,
+    city_name: data.city?.names?.en || null,
+    postal_code: data.postal?.code || null,
+    subdivisions: subdivisions.length > 0 ? subdivisions : null,
+    location_latitude: data.location?.latitude || null,
+    location_longitude: data.location?.longitude || null,
+    location_accuracy_radius: data.location?.accuracy_radius || null,
+    location_time_zone: data.location?.time_zone || null,
+    traits_autonomous_system_number: data.traits?.autonomous_system_number || null,
+    traits_autonomous_system_organization: data.traits?.autonomous_system_organization || null,
+    traits_connection_type: data.traits?.connection_type || null,
+    traits_domain: data.traits?.domain || null,
+    traits_isp: data.traits?.isp || null,
+    traits_organization: data.traits?.organization || null,
+    traits_network: data.traits?.network || null,
+    traits_is_anycast: data.traits?.is_anycast || false
+  };
+}
+
+async function callMaxMind(ip, usePaidGeo) {
+  const accountId = Deno.env.get('MAXMIND_ACCOUNT_ID');
+  const licenseKey = Deno.env.get('MAXMIND_LICENSE_KEY');
+  if (!accountId || !licenseKey) {
+    console.error('MaxMind credentials not configured');
+    return null;
+  }
+  const baseUrl = usePaidGeo
+    ? 'https://geoip.maxmind.com/geoip/v2.1/city'
+    : 'https://geolite.info/geoip/v2.1/city';
+  const response = await fetch(`${baseUrl}/${ip}`, {
+    headers: {
+      'Authorization': 'Basic ' + btoa(`${accountId}:${licenseKey}`),
+      'Accept': 'application/json'
+    }
+  });
+  if (!response.ok) {
+    console.error(`MaxMind API error: ${response.status} for IP ${ip}`);
+    return null;
+  }
+  return await response.json();
+}
+
+async function lookupGeo(ip, usePaidGeo, supabase) {
+  if (!ip) return { country: null, city: null };
+  try {
+    if (usePaidGeo) {
+      // Check cache first
+      const { data: cached } = await supabase
+        .from('ip_geo_cache')
+        .select('*')
+        .eq('ip_address', ip)
+        .maybeSingle();
+      if (cached) {
+        // Cache hit — update tracking columns
+        await supabase
+          .from('ip_geo_cache')
+          .update({
+            last_lookup: new Date().toISOString(),
+            lookup_count: (cached.lookup_count || 0) + 1
+          })
+          .eq('ip_address', ip);
+        return {
+          country: cached.country_iso_code || null,
+          city: cached.city_name || null
+        };
+      }
+      // Cache miss — call paid endpoint
+      const rawData = await callMaxMind(ip, true);
+      if (!rawData) return { country: null, city: null };
+      const flattened = flattenMaxMindResponse(rawData);
+      // Insert into cache
+      await supabase
+        .from('ip_geo_cache')
+        .insert({
+          ip_address: ip,
+          ...flattened,
+          last_updated: new Date().toISOString(),
+          last_lookup: null,
+          lookup_count: 0
+        });
+      return {
+        country: flattened.country_iso_code || null,
+        city: flattened.city_name || null
+      };
+    }
+    // Free GeoLite — no caching
+    const rawData = await callMaxMind(ip, false);
+    if (!rawData) return { country: null, city: null };
+    const flattened = flattenMaxMindResponse(rawData);
+    return {
+      country: flattened.country_iso_code || null,
+      city: flattened.city_name || null
+    };
+  } catch (err) {
+    console.error('Geo lookup error:', err);
+    return { country: null, city: null };
+  }
+}
+
 function parseUserAgent(ua, useUAParser = true) {
   if (!useUAParser) {
     const browser = ua.match(/(Chrome|Firefox|Safari|Edge|Opera)\/(\d+)/);
@@ -74,7 +187,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: site } = await supabase.from('sites').select('id, active, use_uaparser').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
+    const { data: site } = await supabase.from('sites').select('id, active, use_uaparser, use_paid_geo').eq('tracking_id', tracking_id).eq('active', true).maybeSingle();
     if (!site) {
       return new Response(JSON.stringify({
         error: 'Invalid tracking ID or inactive site'
@@ -90,6 +203,7 @@ Deno.serve(async (req)=>{
     const parsedUA = parseUserAgent(userAgent, site.use_uaparser ?? true);
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
+    const geo = await lookupGeo(ip, site.use_paid_geo ?? false, supabase);
     if (event_name) {
       await supabase.from('events').insert({
         site_id: site.id,
@@ -128,7 +242,7 @@ Deno.serve(async (req)=>{
         link_text: link_text || null,
         link_type,
         timestamp: new Date().toISOString(),
-        country: null
+        country: geo.country
       });
       return new Response(JSON.stringify({
         success: true
@@ -181,7 +295,9 @@ Deno.serve(async (req)=>{
         device_model,
         engine_name,
         engine_version,
-        cpu_architecture
+        cpu_architecture,
+        country: geo.country,
+        city: geo.city
       });
     }
     if (is_unload && is_unload === true) {
@@ -215,7 +331,8 @@ Deno.serve(async (req)=>{
       screen_height,
       language,
       timestamp: new Date().toISOString(),
-      country: null
+      country: geo.country,
+      city: geo.city
     });
     return new Response(JSON.stringify({
       success: true
