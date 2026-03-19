@@ -83,6 +83,14 @@ CREATE INDEX IF NOT EXISTS idx_ip_geo_cache_country ON adhoc_analytics.ip_geo_ca
 CREATE INDEX IF NOT EXISTS idx_ip_geo_cache_last_updated ON adhoc_analytics.ip_geo_cache(last_updated);
 
 -- =====================================================
+-- TABLE GRANTS
+-- =====================================================
+
+GRANT SELECT, INSERT, UPDATE ON adhoc_analytics.ip_geo_cache TO anon;
+GRANT SELECT, INSERT, UPDATE ON adhoc_analytics.ip_geo_cache TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON adhoc_analytics.ip_geo_cache TO service_role;
+
+-- =====================================================
 -- ROW LEVEL SECURITY
 -- =====================================================
 
