@@ -18,6 +18,7 @@ export interface Site {
   domain: string;
   tracking_id: string;
   active: boolean;
+  use_paid_geo: boolean;
   is_default: boolean | null;
   excluded_ips: string[] | null;
   created_at: string;
