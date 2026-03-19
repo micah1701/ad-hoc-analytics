@@ -268,9 +268,6 @@ Deno.serve(async (req)=>{
         });
       }
 
-      const { data: session } = await supabase.from('sessions').select('country').eq('session_id', session_id).maybeSingle();
-      const country = session?.country || null;
-
       await supabase.from('link_clicks').insert({
         site_id: site.id,
         session_id,
@@ -302,11 +299,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page, country, city').eq('session_id', session_id).maybeSingle();
-
-    let country = null;
-    let city = null;
-
+    const { data: existingSession } = await supabase.from('sessions').select('id, first_seen, page_count, entry_page').eq('session_id', session_id).maybeSingle();
     if (existingSession) {
       const duration = Math.floor((Date.now() - new Date(existingSession.first_seen).getTime()) / 1000);
       const pageCountIncrement = (is_unload && is_unload === true) ? 0 : 1;
@@ -316,19 +309,7 @@ Deno.serve(async (req)=>{
         duration_seconds: duration,
         exit_page: page_url
       }).eq('session_id', session_id);
-
-      country = existingSession.country;
-      city = existingSession.city;
     } else {
-      const maxmindAccountId = Deno.env.get('MAXMIND_ACCOUNT_ID') || '';
-      const maxmindKey = Deno.env.get('MAXMIND_LICENSE_KEY') || '';
-
-      if (ip && maxmindAccountId && maxmindKey) {
-        const geo = await getGeolocation(ip, maxmindAccountId, maxmindKey);
-        country = geo.country;
-        city = geo.city;
-      }
-
       await supabase.from('sessions').insert({
         site_id: site.id,
         session_id,
