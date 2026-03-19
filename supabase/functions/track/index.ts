@@ -62,28 +62,40 @@ async function callMaxMind(ip, usePaidGeo) {
   return await response.json();
 }
 
+function formatCity(flattened) {
+  if (!flattened.city_name) return null;
+  const state = flattened.subdivisions?.[0]?.iso_code || null;
+  return state ? `${flattened.city_name}, ${state}` : flattened.city_name;
+}
+
 async function lookupGeo(ip, usePaidGeo, supabase) {
   if (!ip) return { country: null, city: null };
   try {
     if (usePaidGeo) {
       // Check cache first
-      const { data: cached } = await supabase
+      const { data: cached, error: selectErr } = await supabase
         .from('ip_geo_cache')
         .select('*')
         .eq('ip_address', ip)
         .maybeSingle();
+      if (selectErr) console.error('ip_geo_cache select error:', selectErr);
       if (cached) {
         // Cache hit — update tracking columns
-        await supabase
+        const { error: updateErr } = await supabase
           .from('ip_geo_cache')
           .update({
             last_lookup: new Date().toISOString(),
             lookup_count: (cached.lookup_count || 0) + 1
           })
           .eq('ip_address', ip);
+        if (updateErr) console.error('ip_geo_cache update error:', updateErr);
+        const cachedState = cached.subdivisions?.[0]?.iso_code || null;
+        const cachedCity = cached.city_name
+          ? (cachedState ? `${cached.city_name}, ${cachedState}` : cached.city_name)
+          : null;
         return {
           country: cached.country_iso_code || null,
-          city: cached.city_name || null
+          city: cachedCity
         };
       }
       // Cache miss — call paid endpoint
@@ -91,7 +103,7 @@ async function lookupGeo(ip, usePaidGeo, supabase) {
       if (!rawData) return { country: null, city: null };
       const flattened = flattenMaxMindResponse(rawData);
       // Insert into cache
-      await supabase
+      const { error: insertErr } = await supabase
         .from('ip_geo_cache')
         .insert({
           ip_address: ip,
@@ -100,9 +112,10 @@ async function lookupGeo(ip, usePaidGeo, supabase) {
           last_lookup: null,
           lookup_count: 0
         });
+      if (insertErr) console.error('ip_geo_cache insert error:', insertErr);
       return {
         country: flattened.country_iso_code || null,
-        city: flattened.city_name || null
+        city: formatCity(flattened)
       };
     }
     // Free GeoLite — no caching
@@ -111,7 +124,7 @@ async function lookupGeo(ip, usePaidGeo, supabase) {
     const flattened = flattenMaxMindResponse(rawData);
     return {
       country: flattened.country_iso_code || null,
-      city: flattened.city_name || null
+      city: formatCity(flattened)
     };
   } catch (err) {
     console.error('Geo lookup error:', err);
