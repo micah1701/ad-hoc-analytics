@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, ArrowUpDown, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import PageViewDrawer from './PageViewDrawer';
+import IpGeoDrawer from './IpGeoDrawer';
 
 interface VisitorListProps {
   siteId: string;
@@ -38,6 +39,7 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
   const [sortField, setSortField] = useState<SortField>('last_seen');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedIpAddress, setSelectedIpAddress] = useState<string | null>(null);
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [copiedIpAddress, setCopiedIpAddress] = useState<string | null>(null);
 
@@ -318,9 +320,13 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
                           {visitor.ip_address ? (
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
-                                <span className="text-slate-900 font-mono text-sm">
+                                <button
+                                  onClick={() => setSelectedIpAddress(visitor.ip_address)}
+                                  className="text-blue-600 hover:text-blue-800 font-mono text-sm hover:underline"
+                                  title="View geolocation details"
+                                >
                                   {visitor.ip_address}
-                                </span>
+                                </button>
                                 <button
                                   onClick={() => copyIpToClipboard(visitor.ip_address!)}
                                   className="text-slate-400 hover:text-slate-600 transition"
@@ -370,6 +376,13 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
           siteId={siteId}
           sessionId={selectedSessionId}
           onClose={() => setSelectedSessionId(null)}
+        />
+      )}
+
+      {selectedIpAddress && (
+        <IpGeoDrawer
+          ipAddress={selectedIpAddress}
+          onClose={() => setSelectedIpAddress(null)}
         />
       )}
     </>
