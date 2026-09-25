@@ -141,6 +141,16 @@ function isIpInCidr(ip: string, cidr: string): boolean {
 
   return (ipNum & mask) === (rangeNum & mask);
 }
+// Supabase's gateway rewrites X-Forwarded-For, so a trusted reverse proxy passes the
+// original client IP in X-Client-IP, authenticated by a shared secret in X-Proxy-Secret.
+function getClientIp(req: Request): string | null {
+  const proxySecret = Deno.env.get('PROXY_SHARED_SECRET');
+  const clientIp = req.headers.get('x-client-ip')?.trim();
+  if (proxySecret && clientIp && req.headers.get('x-proxy-secret') === proxySecret) {
+    return clientIp;
+  }
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null;
+}
 function parseUserAgent(ua, useUAParser = true) {
   if (!useUAParser) {
     const browser = ua.match(/(Chrome|Firefox|Safari|Edge|Opera)\/(\d+)/);
@@ -225,7 +235,7 @@ Deno.serve(async (req) => {
     const userAgent = req.headers.get('user-agent') || '';
     const parsedUA = parseUserAgent(userAgent, site.use_uaparser ?? true);
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
+    const ip = getClientIp(req);
     if (ip && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
       const isExcluded = site.excluded_ips.some((excludedIp: string) => {
         if (excludedIp.includes('/')) {
