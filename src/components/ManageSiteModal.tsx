@@ -379,6 +379,8 @@ window.analytics.trackEvent('search', {
                     <li><code className="bg-white px-1 py-0.5 rounded">192.168.1.1</code> - Exclude a single IP address</li>
                     <li><code className="bg-white px-1 py-0.5 rounded">10.0.0.0/24</code> - Exclude IP range (10.0.0.0 to 10.0.0.255)</li>
                     <li><code className="bg-white px-1 py-0.5 rounded">203.0.113.0/28</code> - Exclude smaller range (16 addresses)</li>
+                    <li><code className="bg-white px-1 py-0.5 rounded">2001:db8::1</code> - Exclude a single IPv6 address</li>
+                    <li><code className="bg-white px-1 py-0.5 rounded">2001:db8:abcd::/48</code> - Exclude IPv6 range (use /64 or /56 for a home network)</li>
                   </ul>
                 </div>
               </div>
