@@ -186,7 +186,7 @@ function parseUserAgent(ua, useUAParser = true) {
     cpu_architecture: cpuArch
   };
 }
-Deno.serve(async (req)=>{
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
@@ -194,7 +194,7 @@ Deno.serve(async (req)=>{
     });
   }
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('default_supabase_secret_key') ?? '', { 
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('default_supabase_secret_key') ?? '', {
       db: { schema: 'adhoc_analytics' }
     });
     const data = await req.json();
@@ -226,8 +226,6 @@ Deno.serve(async (req)=>{
     const parsedUA = parseUserAgent(userAgent, site.use_uaparser ?? true);
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
-    const geo = await lookupGeo(ip, site.use_paid_geo ?? false, supabase);
-    
     if (ip && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
       const isExcluded = site.excluded_ips.some((excludedIp: string) => {
         if (excludedIp.includes('/')) {
@@ -268,6 +266,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
+    const geo = await lookupGeo(ip, site.use_paid_geo ?? false, supabase);
     if (event_type === 'link_click') {
       if (!link_url || !link_type) {
         return new Response(JSON.stringify({
