@@ -28,6 +28,9 @@ interface VisitorStats {
   engine_name: string | null;
   cpu_architecture: string | null;
   country: string | null;
+  country_code: string | null;
+  connection_type: string | null;
+  event_count: number;
 }
 
 type SortField = 'page_count' | 'avg_duration' | 'last_seen';
@@ -42,6 +45,9 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
   const [selectedIpAddress, setSelectedIpAddress] = useState<string | null>(null);
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [copiedIpAddress, setCopiedIpAddress] = useState<string | null>(null);
+  const [usCanadaOnly, setUsCanadaOnly] = useState(false);
+  const [residentialOnly, setResidentialOnly] = useState(false);
+  const [engagedOnly, setEngagedOnly] = useState(false);
 
   useEffect(() => {
     loadVisitors();
@@ -92,6 +98,26 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
         });
       }
 
+      const ips = [...new Set(ipMap.values())];
+      const geoMap = new Map<string, { country_iso_code: string | null; traits_connection_type: string | null }>();
+      if (ips.length > 0) {
+        const { data: geoRows } = await supabase
+          .from('ip_geo_cache')
+          .select('ip_address, country_iso_code, traits_connection_type')
+          .in('ip_address', ips);
+        geoRows?.forEach(g => geoMap.set(g.ip_address, g));
+      }
+
+      const eventCounts = new Map<string, number>();
+      const countRows = (rows: { session_id: string }[] | null) =>
+        rows?.forEach(r => eventCounts.set(r.session_id, (eventCounts.get(r.session_id) || 0) + 1));
+      const [{ data: eventRows }, { data: clickRows }] = await Promise.all([
+        supabase.from('events').select('session_id').eq('site_id', siteId).in('session_id', sessionIds),
+        supabase.from('link_clicks').select('session_id').eq('site_id', siteId).in('session_id', sessionIds)
+      ]);
+      countRows(eventRows);
+      countRows(clickRows);
+
       const visitorStats: VisitorStats[] = sessions.map(session => ({
         session_id: session.session_id,
         page_count: session.page_count,
@@ -108,7 +134,10 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
         device_model: session.device_model,
         engine_name: session.engine_name,
         cpu_architecture: session.cpu_architecture,
-        country: session.country
+        country: session.country,
+        country_code: geoMap.get(ipMap.get(session.session_id) || '')?.country_iso_code || null,
+        connection_type: geoMap.get(ipMap.get(session.session_id) || '')?.traits_connection_type || null,
+        event_count: eventCounts.get(session.session_id) || 0
       }));
 
       setVisitors(visitorStats);
@@ -125,7 +154,18 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
     }
   };
 
-  const sortedVisitors = [...visitors].sort((a, b) => {
+  const isUsCanada = (v: VisitorStats) => {
+    const values = [v.country_code, v.country].map(c => c?.trim().toLowerCase());
+    return values.some(c => c && ['us', 'ca', 'usa', 'united states', 'canada'].includes(c));
+  };
+
+  const filteredVisitors = visitors.filter(v =>
+    (!usCanadaOnly || isUsCanada(v)) &&
+    (!residentialOnly || v.connection_type === 'Cable/DSL') &&
+    (!engagedOnly || v.avg_duration > 0 || v.page_count > 1 || v.event_count > 0)
+  );
+
+  const sortedVisitors = [...filteredVisitors].sort((a, b) => {
     let aVal = a[sortField];
     let bVal = b[sortField];
 
@@ -203,11 +243,35 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
             </button>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-b border-slate-200">
+            <span className="text-sm text-slate-600 mr-1">Filters:</span>
+            {([
+              ['US/Canada Only', usCanadaOnly, setUsCanadaOnly],
+              ['Residential', residentialOnly, setResidentialOnly],
+              ['Engaged', engagedOnly, setEngagedOnly]
+            ] as const).map(([label, active, setActive]) => (
+              <button
+                key={label}
+                onClick={() => setActive(!active)}
+                aria-pressed={active}
+                className={`text-sm px-3 py-1.5 rounded-full border transition ${
+                  active
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex-1 overflow-auto p-6">
             {loading ? (
               <div className="text-center py-12 text-slate-600">Loading visitors...</div>
             ) : visitors.length === 0 ? (
               <div className="text-center py-12 text-slate-600">No visitors found</div>
+            ) : sortedVisitors.length === 0 ? (
+              <div className="text-center py-12 text-slate-600">No visitors match the selected filters</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -365,7 +429,8 @@ export default function VisitorList({ siteId, timeRange, onClose, filterActiveOn
 
           <div className="p-6 border-t border-slate-200">
             <div className="text-sm text-slate-600">
-              Total unique visitors: <span className="font-semibold text-slate-900">{visitors.length}</span>
+              Total unique visitors: <span className="font-semibold text-slate-900">{sortedVisitors.length}</span>
+              {sortedVisitors.length !== visitors.length && <span> of {visitors.length}</span>}
             </div>
           </div>
         </div>
