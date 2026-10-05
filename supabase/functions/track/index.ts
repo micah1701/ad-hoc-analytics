@@ -132,14 +132,73 @@ async function lookupGeo(ip, usePaidGeo, supabase) {
   }
 }
 
-function isIpInCidr(ip: string, cidr: string): boolean {
-  const [range, bits] = cidr.split('/');
-  const mask = bits ? ~(2 ** (32 - parseInt(bits)) - 1) : 0xffffffff;
+type ParsedIp = { version: 4 | 6; value: bigint };
 
-  const ipNum = ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
-  const rangeNum = range.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+function parseIpv4(s: string): bigint | null {
+  const parts = s.split('.');
+  if (parts.length !== 4) return null;
+  let n = 0n;
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p) || Number(p) > 255) return null;
+    n = (n << 8n) + BigInt(p);
+  }
+  return n;
+}
 
-  return (ipNum & mask) === (rangeNum & mask);
+// Parses IPv4 or IPv6 (including "::" compression and embedded IPv4 tails) into a
+// numeric value. IPv4-mapped IPv6 (::ffff:a.b.c.d) is treated as plain IPv4.
+function parseIp(raw: string): ParsedIp | null {
+  const s = raw.trim().replace(/^\[|\]$/g, '').split('%')[0].toLowerCase();
+  if (!s.includes(':')) {
+    const v4 = parseIpv4(s);
+    return v4 === null ? null : { version: 4, value: v4 };
+  }
+  let body = s;
+  let v4Tail: bigint | null = null;
+  const lastColon = s.lastIndexOf(':');
+  if (s.slice(lastColon + 1).includes('.')) {
+    v4Tail = parseIpv4(s.slice(lastColon + 1));
+    if (v4Tail === null) return null;
+    body = s.slice(0, lastColon + 1) + '0:0';
+  }
+  const halves = body.split('::');
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(':') : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - left.length - right.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
+  const groups = [...left, ...Array(halves.length === 2 ? missing : 0).fill('0'), ...right];
+  let n = 0n;
+  for (const g of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+    n = (n << 16n) + BigInt('0x' + g);
+  }
+  if (v4Tail !== null) n |= v4Tail;
+  if (n >> 32n === 0xffffn) return { version: 4, value: n & 0xffffffffn };
+  return { version: 6, value: n };
+}
+
+// Matches an IP against a single address or CIDR range of the same family.
+function ipMatches(ip: ParsedIp, entry: string): boolean {
+  const [addr, bitsStr] = entry.trim().split('/');
+  const range = parseIp(addr);
+  if (!range || range.version !== ip.version) return false;
+  const width = ip.version === 4 ? 32 : 128;
+  if (bitsStr !== undefined && !/^\d{1,3}$/.test(bitsStr)) return false;
+  const bits = bitsStr === undefined ? width : Number(bitsStr);
+  if (bits > width) return false;
+  const shift = BigInt(width - bits);
+  return (ip.value >> shift) === (range.value >> shift);
+}
+// Supabase's gateway rewrites X-Forwarded-For, so a trusted reverse proxy passes the
+// original client IP in X-Client-IP, authenticated by a shared secret in X-Proxy-Secret.
+function getClientIp(req: Request): string | null {
+  const proxySecret = Deno.env.get('PROXY_SHARED_SECRET');
+  const clientIp = req.headers.get('x-client-ip')?.trim();
+  if (proxySecret && clientIp && req.headers.get('x-proxy-secret') === proxySecret) {
+    return clientIp;
+  }
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null;
 }
 function parseUserAgent(ua, useUAParser = true) {
   if (!useUAParser) {
@@ -186,7 +245,7 @@ function parseUserAgent(ua, useUAParser = true) {
     cpu_architecture: cpuArch
   };
 }
-Deno.serve(async (req)=>{
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
@@ -194,7 +253,7 @@ Deno.serve(async (req)=>{
     });
   }
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('default_supabase_secret_key') ?? '', { 
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('default_supabase_secret_key') ?? '', {
       db: { schema: 'adhoc_analytics' }
     });
     const data = await req.json();
@@ -225,17 +284,12 @@ Deno.serve(async (req)=>{
     const userAgent = req.headers.get('user-agent') || '';
     const parsedUA = parseUserAgent(userAgent, site.use_uaparser ?? true);
     const { browser, os, device_type, browser_version, os_version, device_vendor, device_model, engine_name, engine_version, cpu_architecture } = parsedUA;
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || null;
-    const geo = await lookupGeo(ip, site.use_paid_geo ?? false, supabase);
-    
-    if (ip && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
-      const isExcluded = site.excluded_ips.some((excludedIp: string) => {
-        if (excludedIp.includes('/')) {
-          return isIpInCidr(ip, excludedIp);
-        } else {
-          return ip === excludedIp;
-        }
-      });
+    const rawIp = getClientIp(req);
+    const parsedIp = rawIp ? parseIp(rawIp) : null;
+    // Drop anything unparseable so it can't break inserts into the inet columns
+    const ip = rawIp && parsedIp ? rawIp.trim() : null;
+    if (parsedIp && site.excluded_ips && Array.isArray(site.excluded_ips) && site.excluded_ips.length > 0) {
+      const isExcluded = site.excluded_ips.some((excludedIp: string) => ipMatches(parsedIp, excludedIp));
 
       if (isExcluded) {
         return new Response(JSON.stringify({
@@ -268,6 +322,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
+    const geo = await lookupGeo(ip, site.use_paid_geo ?? false, supabase);
     if (event_type === 'link_click') {
       if (!link_url || !link_type) {
         return new Response(JSON.stringify({

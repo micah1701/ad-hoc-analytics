@@ -2,9 +2,12 @@
   'use strict';
 
   const CONFIG = {
-    trackingUrl: window.ANALYTICS_CONFIG?.apiUrl || 'https://gmvshvbfvqujlktpqllf.supabase.co/functions/v1/track',
+    trackingUrl: window.ANALYTICS_CONFIG?.apiUrl || 'https://sb.cahs.cloud/functions/v1/track',
     trackingId: window.ANALYTICS_CONFIG?.trackingId || null
   };
+
+  const deprecatedSite = ['+8jn8Xq5uW51xzaR','UMltn1VY2TPcTQNi','qoZz3jhmqqn+FsZ8'];
+  if (deprecatedSite.includes(CONFIG.trackingId)) return;
 
   if (!CONFIG.trackingId) {
     console.error('Analytics: No tracking ID provided');
