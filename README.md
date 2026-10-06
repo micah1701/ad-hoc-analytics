@@ -429,5 +429,4 @@ When adding new features:
 ## Author
 
 Micah Murray [@micah1701](https://github.com/micah1701)
-
-Proudly vibe coded in a single weekend using [Bolt](https://bolt.new/?rid=w4jgxz).
+[Creative Ad-Hoc Solutions](https://creativeadhocsolutions.com)
