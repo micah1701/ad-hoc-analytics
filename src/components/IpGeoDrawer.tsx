@@ -37,6 +37,8 @@ interface IpGeoData {
   lookup_count: number | null;
 }
 
+const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
 export default function IpGeoDrawer({ ipAddress, onClose }: IpGeoDrawerProps) {
   const [geoData, setGeoData] = useState<IpGeoData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,7 +164,7 @@ export default function IpGeoDrawer({ ipAddress, onClose }: IpGeoDrawerProps) {
           ) : (
             <>
               {/* Map */}
-              {geoData.location_latitude && geoData.location_longitude && (
+              {googleMapsApiKey && geoData.location_latitude && geoData.location_longitude && (
                 <div className="mb-6 rounded-lg overflow-hidden border border-slate-200">
                   <iframe
                     title="IP Location Map"
@@ -171,7 +173,7 @@ export default function IpGeoDrawer({ ipAddress, onClose }: IpGeoDrawerProps) {
                     style={{ border: 0 }}
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
-                    src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${geoData.location_latitude},${geoData.location_longitude}&zoom=10`}
+                    src={`https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${geoData.location_latitude},${geoData.location_longitude}&zoom=10`}
                   />
                   <div className="bg-slate-50 px-4 py-2 text-xs text-slate-500">
                     <span className="font-mono">{geoData.location_latitude.toFixed(4)}, {geoData.location_longitude.toFixed(4)}</span>
