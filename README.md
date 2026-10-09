@@ -1,8 +1,7 @@
-# Ad-Hoc Analytics
+# Ad-Hoc Analytics Production Website
 
 A modern, privacy-focused web analytics platform built with React and Supabase. Track visitor behavior, page views, outbound links, file downloads and custom events in real-time with an intuitive dashboard interface.
 
-## Features
 
 - **Real-time Analytics**: Monitor active visitors and recent activity as it happens
 - **Comprehensive Tracking**: Automatic tracking of page views, sessions, outbound links, and file downloads, plus custom events
@@ -14,7 +13,7 @@ A modern, privacy-focused web analytics platform built with React and Supabase. 
 - **Multi-Site Management**: Track multiple websites from a single dashboard, with a default site
 - **Privacy-Focused**: Session-based analytics. No cookies, no `localStorage`, no cross-site identifiers. (Visitor IP addresses are stored with page views to support geolocation and IP exclusion.)
 
----
+This branch is acting as the primary branch for the actively running website at analytics.ad-hoc.app
 
 ## For End Users
 
