@@ -35,6 +35,7 @@ Run `npm run typecheck` and `npm run lint` after frontend changes; there are no 
 Frontend (`.env`, gitignored; template in `.env.example`):
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_GOOGLE_MAPS_API_KEY` (optional) — Google Maps Embed key for the map in `IpGeoDrawer`. Inlined at build time, so it must be set when running `npm run build`; the map is hidden if it's empty. It is public in the built JS by design: restrict it by HTTP referrer / Maps Embed API in Google Cloud. Never hardcode it in source.
 
 Edge Function secrets (set on the Supabase instance, never committed):
 | Secret | Used for |
