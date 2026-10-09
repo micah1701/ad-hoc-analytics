@@ -306,9 +306,10 @@ Create a `.env` file in the root directory (see `.env.example`):
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_GOOGLE_MAPS_API_KEY=your-google-maps-embed-key
 ```
 
-Get these values from your Supabase project settings (Settings > API).
+Get the Supabase values from your project settings (Settings > API). `VITE_GOOGLE_MAPS_API_KEY` is optional: it powers the map in the IP details drawer, which is hidden when the key is missing. Vite bakes it into the build, so it is still visible to anyone using the dashboard; restrict it in Google Cloud Console by HTTP referrer and to the Maps Embed API.
 
 #### 3. Database Setup
 
