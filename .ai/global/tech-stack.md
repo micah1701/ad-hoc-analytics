@@ -45,7 +45,7 @@ Edge Function secrets (set on the Supabase instance, never committed):
 | `PROXY_SHARED_SECRET` | authenticates the proxy's `X-Client-IP` header |
 
 ## Static hosting
-`public/_redirects` is Netlify-format: `/analytics.js` passes through, everything else rewrites to `/index.html` (SPA fallback). `analytics.js` is served from the same origin as the dashboard because the install snippet is built from `window.location.origin`.
+The built `dist/` is served by Apache on a DigitalOcean server. No redirect/rewrite config is needed (no router; the old Netlify `_redirects` file was removed). `analytics.js` is served from the same origin as the dashboard because the install snippet is built from `window.location.origin`.
 
 ## Reference docs in repo root
 - `maxmind.md` — excerpt of MaxMind web-service docs (auth, endpoints, errors).

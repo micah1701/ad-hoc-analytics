@@ -22,7 +22,7 @@ Hard constraints, conventions and known gotchas. Read before making any change.
 
 ## Deploy
 
-**Frontend**: `npm run build`, deploy `dist/` to the static host (Netlify-style `_redirects`).
+**Frontend**: `npm run build`, deploy `dist/` to the static host (Apache on a DigitalOcean server). The app has no router, so no SPA-fallback rewrite is needed.
 
 **Edge Function** (`supabase/functions/track`): deploy with the Supabase CLI, never the dashboard editor.
 ```bash
@@ -45,7 +45,7 @@ Supabase for this app is self-hosted behind a reverse proxy. Supabase's gateway 
 4. **Deprecated tracking IDs** are hardcoded in `public/analytics.js` (`deprecatedSite`); the script exits immediately for them. These are the legacy SCA sites (commit "stop tracking SCA sites, even though they are disabled"); the guard stops the script client-side even though the sites are `active=false`. Don't remove it without confirming those sites no longer embed the snippet.
 5. **`use_paid_geo` has no UI**: it exists on `Site` and in the DB but `ManageSiteModal` doesn't expose it. Flip it with SQL. `use_uaparser` likewise has no UI and isn't on the `Site` TS interface.
 6. **Row limits**: dashboard stats count by fetching rows (`.select('id')` then `.length`). PostgREST's default row cap (commonly 1000) silently truncates busy sites/long ranges. Use `{ count: 'exact', head: true }` or an RPC if you need accurate large counts.
-7. **Stale docs**: `README.md` (says geo is "coming soon", lists an old structure/migration set, mentions Netlify only) and `.github/copilot-instructions.md` (mentions `SUPABASE_SERVICE_ROLE_KEY`, "FOR ALL USING user_id" RLS example that doesn't match reality) are out of date. `.github` is gitignored. Trust `.ai/` and the code over them; update `README.md` when behaviour changes.
+7. **Stale docs**: `README.md` (says geo is "coming soon", lists an old structure/migration set) and `.github/copilot-instructions.md` (mentions `SUPABASE_SERVICE_ROLE_KEY`, "FOR ALL USING user_id" RLS example that doesn't match reality) are out of date. `.github` is gitignored. Trust `.ai/` and the code over them; update `README.md` when behaviour changes.
 8. **Events path skips geo**: custom events insert into `events` before the geo lookup (no country/city on events). Link clicks store country only (no city).
 9. **Session lookup is global**: the `track` function finds an existing session by `session_id` alone (not scoped to the site). Session IDs are random enough that this works, but don't rely on it for tenant isolation.
 10. **`ip_geo_cache` SELECT policy is `USING (true)` for `authenticated`** — any logged-in user can read the whole cache. It holds no per-user data, but keep that in mind before adding sensitive columns.
